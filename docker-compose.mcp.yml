@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Redis service for caching and session management
+  redis:
+    image: redis:alpine
+    container_name: crawl4ai-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Crawl4AI MCP Server
+  crawl4ai-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: crawl4ai-mcp-server
+    ports:
+      - "11234:11234"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=11234
+    env_file:
+      - deploy/docker/.llm.env
+    volumes:
+      - /dev/shm:/dev/shm  # For Chromium performance
+      - ./data:/app/data   # Persistent data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11234/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  data:
+    driver: local
+
+networks:
+  default:
+    name: crawl4ai-network
